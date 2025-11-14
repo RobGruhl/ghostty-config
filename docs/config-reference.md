@@ -106,6 +106,8 @@ FreeType rendering options (Linux only): `hinting`, `force-autohint`, `monochrom
 **theme**
 Built-in, custom, or absolute path themes. Supports light/dark modes: `light:theme,dark:theme`.
 
+> **Note**: For Claude Code users, the [ccstatusline](https://github.com/yourusername/ccstatusline) status line formatter has Gruvbox themes that automatically align with Ghostty's Gruvbox Dark/Light palettes and support automatic theme switching based on macOS appearance. See [integration-ccstatusline.md](integration-ccstatusline.md) for details.
+
 ## Window and Display
 
 **window-padding-x, window-padding-y**
