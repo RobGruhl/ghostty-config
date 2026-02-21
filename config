@@ -60,6 +60,15 @@ font-size = 15.5
 # Correct syntax for auto theme switching in Ghostty
 theme = dark:Gruvbox Dark,light:Gruvbox Light
 
+# Enforce minimum text contrast (WCAG 2.0 ratio, range 1-21)
+# Gruvbox Light has several palette colors with poor contrast against
+# the cream background (#fbf1c7): yellow (#d79921) is only ~2.2:1,
+# gray (#928374) is ~3.2:1. This forces Ghostty to darken any text
+# that falls below the threshold, fixing readability in light mode
+# without needing a custom theme. Harmless in dark mode since those
+# colors already have sufficient contrast against #282828.
+minimum-contrast = 4.5
+
 # How it works:
 # 1. Ghostty detects macOS System Appearance (Light/Dark/Auto)
 # 2. Uses first theme (gruvbox-dark) for dark mode
