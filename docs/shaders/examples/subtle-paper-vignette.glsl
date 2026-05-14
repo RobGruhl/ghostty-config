@@ -56,14 +56,38 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     col.r += WARMTH * warmMask;
     col.b -= WARMTH * 0.6 * warmMask;
 
-    // --- 3. Very faint animated film grain ---------------------------------
-    // Time-quantized so the grain doesn't shimmer too fast to read against.
-    float tFrame = floor(iTime * 24.0);
-    float n = hash12(fragCoord + tFrame) - 0.5; // ∈ [-0.5, 0.5]
+    // --- 3. Animated paper texture (two layers + slow breathing) ----------
+    //   (a) High-frequency film grain, quantized to 12fps so it reads as
+    //       deliberate texture rather than twitchy noise.
+    //   (b) Low-frequency smooth noise that drifts slowly across the
+    //       surface — paper-fiber unevenness / faint dust.
+    //   (c) Intensity gently breathes over ~16s so the texture feels
+    //       organic rather than mechanical.
+    float tFrame = floor(iTime * 12.0);
+    float hi = hash12(fragCoord + tFrame) - 0.5;   // ∈ [-0.5, 0.5]
+
+    // Bilinear-smoothed mid-freq noise with a slow drift. Cells are
+    // sub-glyph scale (~14px) so this reads as paper fiber rather than
+    // discrete blotches/spots.
+    vec2 lowUV = fragCoord * 0.07 + vec2(iTime * 0.12, iTime * 0.07);
+    vec2 lf    = floor(lowUV);
+    vec2 lff   = fract(lowUV);
+    vec2 lfs   = lff * lff * (3.0 - 2.0 * lff);    // smoothstep weights
+    float a = hash12(lf);
+    float b = hash12(lf + vec2(1.0, 0.0));
+    float c = hash12(lf + vec2(0.0, 1.0));
+    float d = hash12(lf + vec2(1.0, 1.0));
+    float lo = mix(mix(a, b, lfs.x), mix(c, d, lfs.x), lfs.y) - 0.5;
+
+    // Combine: hi-freq dominant, mid-freq lightly adds organic variation.
+    float n = hi * 0.85 + lo * 0.12;
+    // Slow breathing — period ~16s, ±15% amplitude.
+    float breathe = 1.0 + 0.15 * sin(iTime * 0.4);
+
     // Suppress grain in true blacks and pure whites where it would alias.
     float grainMask = smoothstep(0.02, 0.08, luma) *
                       (1.0 - smoothstep(0.92, 0.98, luma));
-    col += n * GRAIN_AMOUNT * grainMask;
+    col += n * GRAIN_AMOUNT * grainMask * breathe;
 
     fragColor = vec4(col, src.a);
 }
