@@ -113,6 +113,15 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 res = iResolution.xy;
     vec2 uv  = fragCoord / res;
 
+    // ----- focus state -------------------------------------------------------
+    // focus = 1.0 fully focused, 0.0 fully unfocused; smooth transitions over
+    // ~0.45s via iTimeFocus. Drives whether the wild stack is active or the
+    // pane is in calm "sleeping CRT" mode (bg vortex/grid/glitches off, text
+    // desaturated and dimmed). The degauss shockwave below still fires on
+    // focus regain regardless.
+    float focusT = clamp((iTime - iTimeFocus) / 0.45, 0.0, 1.0);
+    float focus  = (iFocus > 0.5) ? focusT : (1.0 - focusT);
+
     // ----- CRT barrel curvature ---------------------------------------------
     vec2 cuv = uv * 2.0 - 1.0;
     vec2 curved = cuv * (1.0 + 0.06 * dot(cuv, cuv));
@@ -122,13 +131,13 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
                 * step(0.0, cuv01.y) * step(cuv01.y, 1.0);
 
     // ----- VHS horizontal tracking error ------------------------------------
-    float tear = vhsOffset(cuv01.y, iTime);
+    float tear = vhsOffset(cuv01.y, iTime) * focus;
     vec2 sampUV = cuv01 + vec2(tear, 0.0);
 
     // ----- chromatic aberration on the TERMINAL texture ---------------------
     // Aberration breathes with iTime, stronger near edges.
     float edge   = smoothstep(0.2, 1.0, length(cuv));
-    float aamp   = (0.0025 + 0.0015 * sin(iTime * 1.7)) * (0.6 + edge);
+    float aamp   = (0.0025 + 0.0015 * sin(iTime * 1.7)) * (0.6 + edge) * focus;
     vec2  adir   = normalize(vec2(cos(iTime * 0.6), sin(iTime * 0.6)));
     float r = texture(iChannel0, sampUV + adir * aamp).r;
     float g = texture(iChannel0, sampUV                ).g;
@@ -143,11 +152,11 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     pc = rot(iTime * 0.15) * pc;
     vec3 vor   = vortex(pc, iTime);
     vec3 grid  = synthGrid(uv, iTime);
-    vec3 bg    = vor * 0.55 + grid * 0.9;
+    vec3 bg    = (vor * 0.55 + grid * 0.9) * focus;
 
     // soft sky glow above the horizon
     float sky = smoothstep(0.55, 1.0, uv.y);
-    bg += sky * mix(vec3(0.05, 0.0, 0.15), vec3(0.6, 0.1, 0.5), sky) * 0.6;
+    bg += sky * mix(vec3(0.05, 0.0, 0.15), vec3(0.6, 0.1, 0.5), sky) * 0.6 * focus;
 
     // ----- composite text OVER background; preserve glyph energy ------------
     // Mask glyphs by terminal luma; keep glyphs at full strength.
@@ -175,7 +184,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     bloom = max(bloom - 0.45, 0.0);
     // tint bloom with a slow neon hue cycle
     vec3 neon = hsv2rgb(vec3(fract(iTime * 0.05 + 0.78), 0.7, 1.0));
-    col += bloom * neon * 1.6;
+    col += bloom * neon * mix(0.5, 1.6, focus);
 
     // ----- scanlines + RGB phosphor stripes ---------------------------------
     float scan = 0.85 + 0.15 * sin(fragCoord.y * 3.14159 * 1.0 + iTime * 6.0);
@@ -188,21 +197,26 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     );
     col *= phosphor;
 
-    // ----- cursor: rainbow ring snap on move --------------------------------
+    // ----- cursor: rainbow ring snap on TEXT-cursor change ------------------
+    // Fires on caret movement / blink-color change (NOT mouse motion).
     // iCurrentCursor.xy is the -X,+Y (top-left) corner; center it.
     vec2 cursorCenter = iCurrentCursor.xy + 0.5 * iCurrentCursor.zw;
     float tc = iTime - iTimeCursorChange;
-    if (iCursorVisible.x > 0.5 && tc >= 0.0 && tc < 0.6) {
-        float k = tc / 0.6;
-        float ringR = mix(4.0, 220.0, k);
+    if (iCursorVisible.x > 0.5 && tc >= 0.0 && tc < 1.2) {
+        float k = tc / 1.2;
+        float ringR = mix(4.0, 260.0, k);
         float d = abs(distance(fragCoord, cursorCenter) - ringR);
-        float ring = exp(-d * d / 90.0) * (1.0 - k);
+        float ring = exp(-d * d / 140.0) * (1.0 - k);
         vec3 ringCol = hsv2rgb(vec3(fract(k * 2.0 + iTime * 0.3), 0.9, 1.0));
-        col += ringCol * ring * 1.8;
+        col += ringCol * ring * 2.6;
     }
-    // Always a soft halo behind the cursor itself
-    float ch = exp(-distance(fragCoord, cursorCenter) / 60.0);
-    col += iCurrentCursorColor.rgb * ch * 0.35;
+    // Always-on neon halo around the text cursor. Don't tint by
+    // iCurrentCursorColor — when the theme cursor is dark (e.g. Gruvbox
+    // Light), it'd add near-zero to a cream background and be invisible.
+    // Use a slow rainbow cycle so it shows up against any palette.
+    float ch = exp(-distance(fragCoord, cursorCenter) / 80.0);
+    vec3 haloCol = hsv2rgb(vec3(fract(iTime * 0.08), 0.85, 1.0));
+    col += haloCol * ch * 0.8;
 
     // ----- focus regain: CRT degauss shockwave ------------------------------
     float tf = iTime - iTimeFocus;
@@ -221,11 +235,13 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
         float flash = (1.0 - kf) * 0.25;
         col += vec3(flash);
     }
-    // Unfocused: dim and desaturate so the user knows the pane is asleep.
-    if (iFocus == 0) {
-        float gray = luma(col);
-        col = mix(vec3(gray), col, 0.4) * 0.55;
-    }
+    // Smooth dim + desaturate as focus fades — pane reads as a quiet,
+    // dormant CRT when unfocused while the focused pane keeps the full
+    // synthwave stack. Continuous so transitions don't pop.
+    float gray  = luma(col);
+    float unfoc = 1.0 - focus;
+    col = mix(col, vec3(gray), unfoc * 0.75);
+    col *= mix(1.0, 0.45, unfoc);
 
     // ----- vignette + bezel ------------------------------------------------
     float vig = 1.0 - smoothstep(0.6, 1.4, length(cuv));
