@@ -15,6 +15,19 @@ ghostty-config/
 │   ├── keybindings.md         # Keyboard shortcuts
 │   ├── shell-integration.md   # Shell integration setup
 │   ├── integration-ccstatusline.md  # ccstatusline integration guide
+│   ├── shaders/               # Curated shader knowledge library
+│   │   ├── README.md          # Index — start here
+│   │   ├── 01-quickstart.md   # Install + first shader
+│   │   ├── 02-pipeline.md     # GPU pipeline, GLSL→MSL, perf
+│   │   ├── 03-uniforms-reference.md  # All uniforms (verbatim from Ghostty source)
+│   │   ├── 04-focus-aware.md  # iFocus / iTimeFocus patterns
+│   │   ├── 05-cursor-effects.md  # iCurrentCursor / cursor trail
+│   │   ├── 06-stacking-and-perf.md
+│   │   ├── 07-showcase.md     # Community shader catalog
+│   │   ├── 08-accessibility.md  # Colorblind, contrast, magnifier
+│   │   ├── 09-experimental.md
+│   │   ├── sources.md         # Attribution + external links
+│   │   └── examples/          # Drop-in .glsl examples
 │   └── ...
 └── CLAUDE.md                  # This file
 ```
