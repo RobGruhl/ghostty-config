@@ -28,11 +28,16 @@ const float CURL_AMOUNT       = 0.004; // diagonal sweep — "light catching a p
 const float DROP_SHADOW       = 0.09;  // text-drop-shadow strength (0 = off)
 const vec2  SHADOW_OFFSET_PX  = vec2(1.0, -1.0); // down-right in screen (y-down)
 
-// Lights-off for unfocused surfaces. DIM_LEVEL is the multiplier applied
-// to the final color when the window is not focused (1.0 = no change,
-// 0.5 = half brightness). DIM_FADE_SEC controls the crossfade duration.
-const float DIM_LEVEL         = 0.55;  // 0.55 ≈ "lights dimmed"
-const float DIM_FADE_SEC      = 0.35;  // seconds to fade in/out
+// Focus-aware framing — preserves text legibility on unfocused surfaces
+// (no brightness dim). Three cues stack:
+//   COOL_TINT_AMOUNT       — unfocused: slight cool/blue shift, chromatic only
+//   UNFOCUS_VIGNETTE_BOOST — unfocused: corners darken further
+//   FOCUS_GLOW_AMOUNT      — focused:   soft additive ring just inside the frame
+//   FOCUS_FADE_SEC         — crossfade duration when focus flips
+const float COOL_TINT_AMOUNT       = 0.18;
+const float UNFOCUS_VIGNETTE_BOOST = 0.10;
+const float FOCUS_GLOW_AMOUNT      = 0.04;
+const float FOCUS_FADE_SEC         = 0.35;
 
 // Cheap hash → pseudo-random in [0,1). No texture lookups.
 float hash12(vec2 p) {
@@ -152,17 +157,37 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     float curlMask = smoothstep(0.30, 0.85, luma);   // highlights only
     col += CURL_AMOUNT * curl * curlMask;
 
-    // --- 6. Lights-off when unfocused --------------------------------------
-    // Ghostty exposes iFocus (1 focused / 0 unfocused) and iTimeFocus
-    // (value of iTime at the last focus state change). We crossfade the
-    // dim amount over DIM_FADE_SEC whenever focus flips.
+    // --- 6. Focus framing (no brightness dim) ------------------------------
+    // Three stacked cues: cool tint shift + extra vignette darkening on
+    // unfocused windows, plus an inner edge glow on the focused one.
+    // Brightness/contrast on text is left untouched so unfocused panes
+    // remain fully readable.
     float sinceFlip = iTime - iTimeFocus;
-    float fade      = clamp(sinceFlip / DIM_FADE_SEC, 0.0, 1.0);
-    // Target: 0 when focused, 1 when unfocused. Fade from the opposite.
-    float target    = (iFocus > 0) ? 0.0 : 1.0;
-    float dimT      = mix(1.0 - target, target, fade);
-    float dimMul    = mix(1.0, DIM_LEVEL, dimT);
-    col *= dimMul;
+    float fade      = clamp(sinceFlip / FOCUS_FADE_SEC, 0.0, 1.0);
+    float target    = (iFocus > 0) ? 0.0 : 1.0;       // 1 = unfocused
+    float unfocusT  = mix(1.0 - target, target, fade); // 0 focused, 1 unfocused
+
+    // (a) Cool/blue tint — shift hue toward blue, scaled by luma so dark
+    //     text doesn't pick up a halo but bright cream backgrounds do.
+    //     Previously gated on chromatic content, but cream has very low
+    //     chroma so the shift was invisible exactly where it was needed.
+    float coolK  = COOL_TINT_AMOUNT * unfocusT * luma;
+    col.r -= coolK * 0.7;
+    col.g -= coolK * 0.25;
+    col.b += coolK * 0.5;
+
+    // (b) Unfocus vignette boost — corners darken further; center barely
+    //     touched so on-screen text near the middle stays the same.
+    float unfocusVig = smoothstep(0.30, 0.70, dist);  // 0 center → 1 corners
+    col *= 1.0 - UNFOCUS_VIGNETTE_BOOST * unfocusT * unfocusVig;
+
+    // (c) Focus glow — soft additive ring just inside the frame, only on
+    //     the focused window. Peaks ~0.55 from center, fades inward and
+    //     outward, so the frame "lifts" without affecting the text region.
+    float ringT = (1.0 - unfocusT);
+    float ring  = smoothstep(0.40, 0.55, dist) *
+                  (1.0 - smoothstep(0.55, 0.72, dist));
+    col += FOCUS_GLOW_AMOUNT * ringT * ring;
 
     fragColor = vec4(col, src.a);
 }
