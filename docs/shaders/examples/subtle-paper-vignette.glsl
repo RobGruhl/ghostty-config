@@ -18,8 +18,8 @@
 // while the surface is focused, which is exactly what you want.
 
 // Tweakable knobs — all small by design. Raise cautiously.
-const float VIGNETTE_STRENGTH = 0.20; // 0.0 = off, 0.10 = strong
-const float VIGNETTE_SOFTNESS = 0.90; // larger = softer falloff
+const float VIGNETTE_STRENGTH = 0.06; // 0.0 = off, 0.10 = strong
+const float VIGNETTE_SOFTNESS = 1.20; // larger = softer falloff
 const float GRAIN_AMOUNT      = 0.018; // peak-to-peak luma jitter
 const float WARMTH            = 0.0;   // highlight R/B nudge — 0 on light bg (was 0.05 → orange tint)
 const float EMBOSS_AMOUNT     = 0.014; // fake directional light on fiber noise
