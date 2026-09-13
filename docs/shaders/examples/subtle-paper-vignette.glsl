@@ -18,8 +18,8 @@
 // while the surface is focused, which is exactly what you want.
 
 // Tweakable knobs — all small by design. Raise cautiously.
-const float VIGNETTE_STRENGTH = 0.20; // 0.0 = off, 0.10 = strong
-const float VIGNETTE_SOFTNESS = 0.90; // larger = softer falloff
+const float VIGNETTE_STRENGTH = 0.06; // 0.0 = off, 0.10 = strong
+const float VIGNETTE_SOFTNESS = 1.00; // falloff width in dist units; larger = blurrier
 const float GRAIN_AMOUNT      = 0.018; // peak-to-peak luma jitter
 const float WARMTH            = 0.0;   // highlight R/B nudge — 0 on light bg (was 0.05 → orange tint)
 const float EMBOSS_AMOUNT     = 0.014; // fake directional light on fiber noise
@@ -36,7 +36,7 @@ const vec2  SHADOW_OFFSET_PX  = vec2(1.0, -1.0); // down-right in screen (y-down
 //   FOCUS_FADE_SEC         — crossfade duration when focus flips
 const float COOL_TINT_AMOUNT       = 0.18;
 const float UNFOCUS_VIGNETTE_BOOST = 0.10;
-const float FOCUS_GLOW_AMOUNT      = 0.04;
+const float FOCUS_GLOW_AMOUNT      = 0.015;
 const float FOCUS_FADE_SEC         = 0.35;
 
 // Cheap hash → pseudo-random in [0,1). No texture lookups.
@@ -76,21 +76,22 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
     vec2 centered = uv - 0.5;
     centered.x *= iResolution.x / iResolution.y;
     float dist = length(centered);
-    // smoothstep gives a gentle, photographic falloff.
-    float vig = 1.0 - smoothstep(0.35, 0.35 + VIGNETTE_SOFTNESS,
-                                 dist + VIGNETTE_SOFTNESS - 0.35);
-    // Re-map so center == 1.0 and edges == 1.0 - VIGNETTE_STRENGTH.
-    float vigMul = mix(1.0 - VIGNETTE_STRENGTH, 1.0, vig);
-    col *= vigMul;
+    // Falloff must be exactly 0 across the whole center region and ease in
+    // quadratically, otherwise the un-darkened middle reads as a bright
+    // circular blob against the transition ring.
+    float vig = smoothstep(0.35, 0.35 + VIGNETTE_SOFTNESS, dist);
+    vig *= vig; // quadratic ease-in: no perceptible onset boundary
+    col *= 1.0 - VIGNETTE_STRENGTH * vig;
 
     // --- 1b. Inner shadow (recessed-paper band) ----------------------------
     // A tight darkening just inside the frame — sells the idea that the
     // paper is set into a tray rather than floating flush. Band peaks near
     // the very edge and fades quickly inward, so it doesn't double up with
     // the main vignette in the middle of the screen.
-    float edgeT = smoothstep(0.45, 0.62, dist); // 0 inside, 1 at corners
+    float edgeT = smoothstep(0.45, 0.70, dist); // 0 inside, 1 at corners
     // Hump shape: rises then falls so the darkest line is near the edge.
-    float band = edgeT * (1.0 - smoothstep(0.62, 0.78, dist));
+    // Wide transitions keep the band from reading as a discrete ring.
+    float band = edgeT * (1.0 - smoothstep(0.70, 0.95, dist));
     col *= 1.0 - INNER_SHADOW * band;
 
     // --- 2. Whisper of paper warmth in highlights --------------------------
@@ -178,15 +179,15 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     // (b) Unfocus vignette boost — corners darken further; center barely
     //     touched so on-screen text near the middle stays the same.
-    float unfocusVig = smoothstep(0.30, 0.70, dist);  // 0 center → 1 corners
+    float unfocusVig = smoothstep(0.30, 1.00, dist);  // 0 center → 1 corners
     col *= 1.0 - UNFOCUS_VIGNETTE_BOOST * unfocusT * unfocusVig;
 
-    // (c) Focus glow — soft additive ring just inside the frame, only on
-    //     the focused window. Peaks ~0.55 from center, fades inward and
-    //     outward, so the frame "lifts" without affecting the text region.
+    // (c) Focus glow — very soft additive lift toward the frame, only on
+    //     the focused window. Deliberately wide and weak: a tight bright
+    //     ring here reads as a white circular stain on light backgrounds.
     float ringT = (1.0 - unfocusT);
-    float ring  = smoothstep(0.40, 0.55, dist) *
-                  (1.0 - smoothstep(0.55, 0.72, dist));
+    float ring  = smoothstep(0.35, 0.70, dist) *
+                  (1.0 - smoothstep(0.70, 1.10, dist));
     col += FOCUS_GLOW_AMOUNT * ringT * ring;
 
     fragColor = vec4(col, src.a);
