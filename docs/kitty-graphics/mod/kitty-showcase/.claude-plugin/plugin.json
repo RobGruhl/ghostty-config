@@ -1,0 +1,7 @@
+{
+  "name": "kitty-showcase",
+  "version": "0.1.0",
+  "description": "A pane drawn with Kitty graphics: a live activity orb and a context-window ring",
+  "license": "MIT",
+  "types": "./types/index.d.ts"
+}

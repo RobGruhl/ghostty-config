@@ -28,6 +28,10 @@ ghostty-config/
 │   │   ├── 09-experimental.md
 │   │   ├── sources.md         # Attribution + external links
 │   │   └── examples/          # Drop-in .glsl examples
+│   ├── kitty-graphics/        # Ghostty 1.4 Kitty animation + relative placements
+│   │   ├── README.md          # Claude Code showcase, idea catalog, protocol notes
+│   │   ├── examples/          # Runnable demos: orb.py, fleet.py, gauge.py (+ kgfx.py)
+│   │   └── mod/kitty-showcase/  # Claude Code mod: pane with Kitty-graphics orb + context ring
 │   └── ...
 └── CLAUDE.md                  # This file
 ```
